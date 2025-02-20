@@ -17,9 +17,9 @@ export interface Config {
   localPath: string
 }
 
-const inject = ['monetary'];
+export const inject = ['monetary'];
 
-const usage = `
+export const usage = `
 目前题目来源于B站，由于部分题目只有正确答案，没有选项；采用 ChatGPT 智能补充选项 (效果挺差！)
 
 
@@ -232,10 +232,11 @@ ${this.pic ? h.image(this.pic) : ''}
             const dict = { 0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G' };
             return `
 ${answer.pic ? h.image(answer.pic) : ''}      
-${this.answerGuild}[第 ${index + 1} 题]
+${this.answerGuild}[第 ${index + 1} 题]${answer.column?.length ? "选择题" : "填空题"}
 ${answer.ask}
-${answer.column.map((item, index) => { return `${dict[index]}. ${item}`; }).join('\n')}   
-请选择你觉得正确的答案，发送 /回答 A ~ ${dict[answer.column.length - 1]} 回复
+${answer.column.map((item, index) => { return `${dict[index]}. ${item}`; }).join('\n')}
+${answer.column?.length ? `请选择你觉得正确的答案，发送 /回答 A ~ ${dict[answer.column.length - 1]} 回复` :
+                '仔细审题，对问题的描述填写正确答案，发送 /回答 正确的答案 回复'}
 `;
           },
           // 判断题目的回答是否正确
@@ -267,17 +268,27 @@ ${answer.column.map((item, index) => { return `${dict[index]}. ${item}`; }).join
               return;
             }
             this.playUser[session.userId].timer = +new Date();
-            query = query.toUpperCase();
             const index = this.playIndex;
-            const dict = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5 };
-            if (dict[query] !== 0 && !dict[query]) {
-              await session.send(at + '[×] 回答有误，请按  /回答 标识 格式发送');
-              return;
+            let result = ''
+            // 如果有选项
+            if (this.answerItem[index].column?.length) {
+              query = query.trim().toUpperCase();
+              const dict = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'K': 9, 'L': 10, 'M': 11, 'N': 12, 'O': 13, 'P': 14, 'Q': 15, 'R': 16, 'S': 17, 'T': 18, 'U': 19, 'V': 20, 'W': 21, 'X': 22, 'Z': 23 };
+              if (dict[query] !== 0 && !dict[query]) {
+                await session.send(at + '[×] 回答有误，该题为选择题，请按  /回答 标识 格式发送');
+                return;
+              }
+              // 提取答案
+              result = this.answerItem[index].column[dict[query]];
+            } else {
+              result = query.replace(/\s/g, '')
+              console.log('正确的答案：' + this.answerItem[index].susses.map(text => text.replace(/\s/g, '')).join('|'));
+
+              console.log('回复的答案:' + result.replace(/\s/g, ''));
+
             }
-            // 提取答案
-            const result = this.answerItem[index].column[dict[query]];
             // 判断结果 
-            if (!(this.answerItem[index].susses.includes(result))) {
+            if (!(this.answerItem[index].susses.map(text => text.replace(/\s/g, '')).includes(result.replace(/\s/g, '')))) {
               ++this.playUser[session.userId].error; // 答错数 + 1
               this.playUser[session.userId].combo = 0; // 中断连击
               // 额外内容
@@ -316,7 +327,7 @@ ${answer.column.map((item, index) => { return `${dict[index]}. ${item}`; }).join
     },
   };
   ctx
-    .command('回答 <option>')
+    .command('回答 <option:text>')
     .userFields(['id']).action(async ({ session }, option) => {
       let at = '';
       if (config.atQQ) {
